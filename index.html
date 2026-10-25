@@ -1,1 +1,139 @@
 
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#07131c">
+<title>PYTHON VISION — Object Detection</title>
+<style>
+:root{--bg:#071018;--panel:#1a2632;--edge:#17616b;--cyan:#20d9e8;--gold:#e8bd67;--muted:#8295a8;--red:#ff626a}
+*{box-sizing:border-box}
+body{margin:0;padding:12px;background:var(--bg);color:#eaf5fb;font-family:system-ui,Arial,sans-serif}
+.app{max-width:900px;margin:auto}
+.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.brand{font-weight:900;letter-spacing:2px;color:var(--gold);font-size:23px}
+.clock{color:var(--cyan);font-family:monospace}
+.panel{background:var(--panel);border:1px solid var(--edge);border-radius:16px;padding:12px;margin-bottom:12px}
+.viewer{position:relative;width:100%;aspect-ratio:4/3;background:#03080c;border-radius:12px;overflow:hidden}
+video,canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+canvas{pointer-events:none}
+.overlay{position:absolute;top:8px;left:8px;background:#06131ddd;color:var(--cyan);padding:6px;border-radius:6px;font:12px monospace}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.stat{background:#101b26;border-radius:10px;padding:10px 2px;text-align:center}
+.num{font:bold 20px monospace;color:var(--cyan)}
+.lbl{font-size:9px;color:var(--muted);margin-top:4px}
+.actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+button{border:1px solid var(--edge);border-radius:10px;padding:13px 5px;background:#1a2935;color:var(--cyan);font-weight:800}
+button:disabled{opacity:.4}
+.gold{color:var(--gold)}.red{color:var(--red)}
+.status{font-size:13px;color:var(--muted);line-height:1.5;margin-top:10px;overflow-wrap:anywhere}
+h2{font:800 13px monospace;letter-spacing:1px;color:var(--gold);margin:0 0 10px}
+.item{padding:8px 0;border-bottom:1px solid #34414d;font-size:13px;display:flex;justify-content:space-between;gap:10px}
+.empty{color:var(--muted);font-size:13px}
+.list{max-height:190px;overflow:auto}
+footer{text-align:center;color:var(--muted);font:11px monospace;padding:8px}
+</style>
+</head>
+<body>
+<main class="app">
+<header class="top"><div class="brand">PYTHON VISION</div><div class="clock" id="clock">--:--:--</div></header>
+<section class="panel">
+<div class="viewer"><video id="video" autoplay muted playsinline></video><canvas id="canvas"></canvas><div class="overlay" id="engineLabel">ENGINE: WAITING</div></div>
+<div class="status" id="status">Ready. Tap START CAMERA. Internet is required to load the AI model.</div>
+</section>
+<section class="panel stats">
+<div class="stat"><div class="num" id="scanCount">0</div><div class="lbl">SCANS</div></div>
+<div class="stat"><div class="num" id="objectCount">0</div><div class="lbl">OBJECTS</div></div>
+<div class="stat"><div class="num" id="fps">0</div><div class="lbl">FPS</div></div>
+<div class="stat"><div class="num" id="engine">OFF</div><div class="lbl">ENGINE</div></div>
+</section>
+<section class="panel actions">
+<button id="startBtn">▶ START CAMERA</button><button id="pauseBtn" disabled>Ⅱ PAUSE</button>
+<button id="flipBtn" disabled>↻ FLIP CAMERA</button><button class="gold" id="csvBtn">↓ EXPORT CSV</button>
+<button class="red" id="clearBtn">× CLEAR LOG</button><button id="stopBtn" disabled>■ STOP CAMERA</button>
+</section>
+<section class="panel"><h2>ACTIVE DETECTIONS</h2><div id="detections" class="empty">Start the camera to identify objects.</div></section>
+<section class="panel"><h2>DETECTION LOG</h2><div id="logs" class="list"><div class="empty">No detections logged.</div></div></section>
+<footer>LIVE AI · TENSORFLOW.JS · COCO-SSD</footer>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
+<script>
+(()=>{
+'use strict';
+const $=id=>document.getElementById(id),video=$('video'),canvas=$('canvas'),ctx=canvas.getContext('2d');
+let model=null,stream=null,running=false,paused=false,facing='environment',raf=0,scans=0,frames=0,fpsStamp=0,busy=false,logs=[],lastSeen={};
+function say(s){$('status').textContent=s}
+function clock(){$('clock').textContent=new Date().toLocaleTimeString()}
+setInterval(clock,1000);clock();
+function buttons(on){$('startBtn').disabled=on;$('pauseBtn').disabled=!on;$('flipBtn').disabled=!on;$('stopBtn').disabled=!on}
+function stopTracks(){if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}video.srcObject=null}
+async function start(){
+ if(running&&!paused)return;
+ try{
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia)throw Error('Camera requires HTTPS. Open the published GitHub Pages HTTPS website.');
+  say('Requesting camera permission…');
+  if(!stream){
+   stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:facing},width:{ideal:640},height:{ideal:480}}});
+   video.srcObject=stream;
+   await new Promise((resolve,reject)=>{video.onloadedmetadata=resolve;video.onerror=reject});
+   await video.play();
+  }
+  if(!model){
+   say('Loading AI model. Please wait; first launch needs internet…');
+   if(!window.tf||!window.cocoSsd)throw Error('AI libraries did not load. Check internet and reload.');
+   await tf.ready();model=await cocoSsd.load({base:'lite_mobilenet_v2'});
+  }
+  running=true;paused=false;buttons(true);$('engine').textContent='LIVE';$('engineLabel').textContent='ENGINE: LIVE AI';say('Camera and AI detection running. Point at common objects.');
+  frames=0;fpsStamp=performance.now();loop();
+ }catch(e){say('Could not start: '+e.message);$('engine').textContent='ERROR';$('engineLabel').textContent='ENGINE: ERROR';stopTracks();buttons(false)}
+}
+async function loop(){
+ if(!running||paused)return;
+ if(video.videoWidth&&video.videoHeight){canvas.width=video.videoWidth;canvas.height=video.videoHeight}
+ if(!busy&&model&&video.readyState>=2){
+  busy=true;
+  try{const p=await model.detect(video,20,.45);draw(p);scans++;$('scanCount').textContent=scans;$('objectCount').textContent=p.length;render(p);record(p)}
+  catch(e){say('Detection error: '+e.message)}
+  finally{busy=false}
+ }
+ frames++;const now=performance.now();if(now-fpsStamp>=1000){$('fps').textContent=Math.round(frames*1000/(now-fpsStamp));frames=0;fpsStamp=now}
+ raf=requestAnimationFrame(loop)
+}
+function draw(predictions){
+ ctx.clearRect(0,0,canvas.width,canvas.height);
+ predictions.forEach(p=>{
+  const [x,y,w,h]=p.bbox,label=p.class+' '+Math.round(p.score*100)+'%';
+  ctx.lineWidth=3;ctx.strokeStyle='#22e8ed';ctx.strokeRect(x,y,w,h);
+  ctx.font='bold 16px system-ui';const tw=ctx.measureText(label).width;
+  ctx.fillStyle='#00bfc9';ctx.fillRect(x,Math.max(0,y-24),tw+12,24);
+  ctx.fillStyle='#041017';ctx.fillText(label,x+6,Math.max(17,y-7));
+ })
+}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function render(p){
+ const el=$('detections');
+ if(!p.length){el.className='empty';el.textContent='No objects confidently detected in this frame.';return}
+ el.className='';
+ el.innerHTML=p.map(x=>'<div class="item"><span>'+esc(x.class)+'</span><b>'+Math.round(x.score*100)+'%</b></div>').join('')
+}
+function record(p){
+ const now=Date.now();
+ p.forEach(x=>{if(now-(lastSeen[x.class]||0)>2500){lastSeen[x.class]=now;logs.unshift({time:new Date().toLocaleString(),object:x.class,confidence:Math.round(x.score*100)});logs=logs.slice(0,500)}});
+ $('logs').innerHTML=logs.length?logs.slice(0,100).map(x=>'<div class="item"><span>'+esc(x.object)+' <small>'+esc(x.time)+'</small></span><b>'+x.confidence+'%</b></div>').join(''):'<div class="empty">No detections logged.</div>'
+}
+function stop(){running=false;paused=false;cancelAnimationFrame(raf);stopTracks();ctx.clearRect(0,0,canvas.width,canvas.height);buttons(false);$('engine').textContent='OFF';$('engineLabel').textContent='ENGINE: STOPPED';$('fps').textContent='0';$('objectCount').textContent='0';say('Camera stopped.')}
+$('startBtn').onclick=start;
+$('pauseBtn').onclick=()=>{if(!running)return;paused=!paused;$('pauseBtn').textContent=paused?'▶ RESUME':'Ⅱ PAUSE';if(paused){cancelAnimationFrame(raf);say('Detection paused.')}else{say('Detection resumed.');fpsStamp=performance.now();frames=0;loop()}};
+$('stopBtn').onclick=stop;
+$('flipBtn').onclick=async()=>{const was=running;stop();facing=facing==='environment'?'user':'environment';if(was)await start()};
+$('clearBtn').onclick=()=>{logs=[];lastSeen={};record([]);$('logs').innerHTML='<div class="empty">Log cleared.</div>';say('Detection log cleared.')};
+$('csvBtn').onclick=()=>{if(!logs.length){say('No log entries to export yet.');return}const rows=[['Time','Object','Confidence (%)'],...logs.map(x=>[x.time,x.object,x.confidence])];const csv=rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\r\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download='python-vision-log.csv';a.click();URL.revokeObjectURL(a.href)};
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&running&&!paused){paused=true;cancelAnimationFrame(raf);$('pauseBtn').textContent='▶ RESUME';say('Paused in background. Tap RESUME when ready.')}});
+window.addEventListener('beforeunload',stop);
+})();
+</script>
+</body>
+</html>
+
