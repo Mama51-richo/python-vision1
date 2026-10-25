@@ -1,4 +1,3 @@
-
 <!doctype html>
 <html lang="en">
 <head>
@@ -33,6 +32,7 @@ h2{font:800 13px monospace;letter-spacing:1px;color:var(--gold);margin:0 0 10px}
 .empty{color:var(--muted);font-size:13px}
 .list{max-height:190px;overflow:auto}
 footer{text-align:center;color:var(--muted);font:11px monospace;padding:8px}
+@media(max-width:380px){.brand{font-size:19px}.num{font-size:17px}.stat{padding:8px 1px}.lbl{font-size:8px}}
 </style>
 </head>
 <body>
@@ -55,6 +55,13 @@ footer{text-align:center;color:var(--muted);font:11px monospace;padding:8px}
 </section>
 <section class="panel"><h2>ACTIVE DETECTIONS</h2><div id="detections" class="empty">Start the camera to identify objects.</div></section>
 <section class="panel"><h2>DETECTION LOG</h2><div id="logs" class="list"><div class="empty">No detections logged.</div></div></section>
+<section class="panel actions"><button id="analysisBtn" class="gold">▤ OPEN ANALYSIS VIEW</button></section>
+<section class="panel" id="analysisView"><h2>ANALYSIS VIEW</h2><div class="stats">
+<div class="stat"><div class="num" id="analysisEvents">0</div><div class="lbl">LOGGED EVENTS</div></div>
+<div class="stat"><div class="num" id="analysisTypes">0</div><div class="lbl">OBJECT TYPES</div></div>
+<div class="stat"><div class="num" id="analysisAvg">0%</div><div class="lbl">AVG CONFIDENCE</div></div>
+<div class="stat"><div class="num" id="analysisTop">—</div><div class="lbl">TOP OBJECT</div></div>
+</div><h2 style="margin-top:14px">OBJECT BREAKDOWN</h2><div id="analysisBreakdown" class="empty">Start the camera and detect objects to build analysis.</div></section>
 <footer>LIVE AI · TENSORFLOW.JS · COCO-SSD</footer>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
@@ -121,9 +128,22 @@ function render(p){
 function record(p){
  const now=Date.now();
  p.forEach(x=>{if(now-(lastSeen[x.class]||0)>2500){lastSeen[x.class]=now;logs.unshift({time:new Date().toLocaleString(),object:x.class,confidence:Math.round(x.score*100)});logs=logs.slice(0,500)}});
- $('logs').innerHTML=logs.length?logs.slice(0,100).map(x=>'<div class="item"><span>'+esc(x.object)+' <small>'+esc(x.time)+'</small></span><b>'+x.confidence+'%</b></div>').join(''):'<div class="empty">No detections logged.</div>'
+ $('logs').innerHTML=logs.length?logs.slice(0,100).map(x=>'<div class="item"><span>'+esc(x.object)+' <small>'+esc(x.time)+'</small></span><b>'+x.confidence+'%</b></div>').join(''):'<div class="empty">No detections logged.</div>';
+ renderAnalysis();
+}
+function renderAnalysis(){
+ const counts={},conf={};let total=0;
+ logs.forEach(x=>{counts[x.object]=(counts[x.object]||0)+1;conf[x.object]=(conf[x.object]||0)+Number(x.confidence||0);total+=Number(x.confidence||0)});
+ const types=Object.keys(counts).sort((a,b)=>counts[b]-counts[a]);
+ $('analysisEvents').textContent=logs.length;
+ $('analysisTypes').textContent=types.length;
+ $('analysisAvg').textContent=logs.length?Math.round(total/logs.length)+'%':'0%';
+ $('analysisTop').textContent=types.length?types[0]:'—';
+ $('analysisBreakdown').className=types.length?'':'empty';
+ $('analysisBreakdown').innerHTML=types.length?types.map(k=>'<div class="item"><span>'+esc(k)+' <small>· '+counts[k]+' event(s)</small></span><b>'+Math.round(conf[k]/counts[k])+'% avg</b></div>').join(''):'No analysis yet. Start the camera to detect objects.';
 }
 function stop(){running=false;paused=false;cancelAnimationFrame(raf);stopTracks();ctx.clearRect(0,0,canvas.width,canvas.height);buttons(false);$('engine').textContent='OFF';$('engineLabel').textContent='ENGINE: STOPPED';$('fps').textContent='0';$('objectCount').textContent='0';say('Camera stopped.')}
+$('analysisBtn').onclick=()=>{$('analysisView').scrollIntoView({behavior:'smooth',block:'start'});renderAnalysis()};
 $('startBtn').onclick=start;
 $('pauseBtn').onclick=()=>{if(!running)return;paused=!paused;$('pauseBtn').textContent=paused?'▶ RESUME':'Ⅱ PAUSE';if(paused){cancelAnimationFrame(raf);say('Detection paused.')}else{say('Detection resumed.');fpsStamp=performance.now();frames=0;loop()}};
 $('stopBtn').onclick=stop;
@@ -136,4 +156,3 @@ window.addEventListener('beforeunload',stop);
 </script>
 </body>
 </html>
-
