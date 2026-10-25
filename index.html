@@ -8,13 +8,13 @@
 <style>
 :root{--bg:#071018;--panel:#1a2632;--edge:#17616b;--cyan:#20d9e8;--gold:#e8bd67;--muted:#8295a8;--red:#ff626a}
 *{box-sizing:border-box}
-body{margin:0;padding:12px;background:var(--bg);color:#eaf5fb;font-family:system-ui,Arial,sans-serif}
-.app{max-width:900px;margin:auto}
+body{margin:0;padding:0;background:var(--bg);color:#eaf5fb;font-family:system-ui,Arial,sans-serif;min-height:100dvh}
+.app{width:100%;max-width:900px;margin:auto;padding:10px 10px 82px}
 .top{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
 .brand{font-weight:900;letter-spacing:2px;color:var(--gold);font-size:23px}
 .clock{color:var(--cyan);font-family:monospace}
-.panel{background:var(--panel);border:1px solid var(--edge);border-radius:16px;padding:12px;margin-bottom:12px}
-.viewer{position:relative;width:100%;aspect-ratio:4/3;background:#03080c;border-radius:12px;overflow:hidden}
+.panel{background:var(--panel);border:1px solid var(--edge);border-radius:14px;padding:10px;margin-bottom:9px}
+.viewer{position:relative;width:100%;height:min(48dvh,440px);min-height:230px;aspect-ratio:auto;background:#03080c;border-radius:12px;overflow:hidden}
 video,canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
 canvas{pointer-events:none}
 .overlay{position:absolute;top:8px;left:8px;background:#06131ddd;color:var(--cyan);padding:6px;border-radius:6px;font:12px monospace}
@@ -22,8 +22,8 @@ canvas{pointer-events:none}
 .stat{background:#101b26;border-radius:10px;padding:10px 2px;text-align:center}
 .num{font:bold 20px monospace;color:var(--cyan)}
 .lbl{font-size:9px;color:var(--muted);margin-top:4px}
-.actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
-button{border:1px solid var(--edge);border-radius:10px;padding:13px 5px;background:#1a2935;color:var(--cyan);font-weight:800}
+.actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+button{border:1px solid var(--edge);border-radius:10px;padding:11px 4px;background:#1a2935;color:var(--cyan);font-weight:800;font-size:12px;min-width:0}
 button:disabled{opacity:.4}
 .gold{color:var(--gold)}.red{color:var(--red)}
 .status{font-size:13px;color:var(--muted);line-height:1.5;margin-top:10px;overflow-wrap:anywhere}
@@ -31,13 +31,18 @@ h2{font:800 13px monospace;letter-spacing:1px;color:var(--gold);margin:0 0 10px}
 .item{padding:8px 0;border-bottom:1px solid #34414d;font-size:13px;display:flex;justify-content:space-between;gap:10px}
 .empty{color:var(--muted);font-size:13px}
 .list{max-height:190px;overflow:auto}
-footer{text-align:center;color:var(--muted);font:11px monospace;padding:8px}
-@media(max-width:380px){.brand{font-size:19px}.num{font-size:17px}.stat{padding:8px 1px}.lbl{font-size:8px}}
+footer{text-align:center;color:var(--muted);font:10px monospace;padding:8px}
+.bottom-nav{position:fixed;z-index:20;left:0;right:0;bottom:0;display:grid;grid-template-columns:repeat(4,1fr);gap:4px;padding:7px max(8px,env(safe-area-inset-right)) calc(7px + env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left));background:#08131df2;border-top:1px solid #17616b;backdrop-filter:blur(12px)}
+.bottom-nav button{padding:9px 2px;border:0;background:transparent;color:var(--muted);font-size:10px;border-radius:9px}.bottom-nav button.active{background:#10313b;color:var(--cyan);outline:1px solid #17616b}
+.view{display:none}.view.active{display:block}.mini-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+@media(max-width:380px){.app{padding:8px 8px 78px}.brand{font-size:18px}.num{font-size:17px}.stat{padding:8px 1px}.lbl{font-size:8px}.viewer{height:42dvh;min-height:215px}.panel{padding:8px}.mini-actions button{font-size:10px}}
 </style>
 </head>
 <body>
 <main class="app">
 <header class="top"><div class="brand">PYTHON VISION</div><div class="clock" id="clock">--:--:--</div></header>
+<nav class="bottom-nav" aria-label="Main navigation"><button class="active" data-view="scanView">◉<br>SCAN</button><button data-view="galleryView">▧<br>GALLERY</button><button data-view="statsView">▥<br>STATS</button><button data-view="logsView">☷<br>LOGS</button></nav>
+<div id="scanView" class="view active">
 <section class="panel">
 <div class="viewer"><video id="video" autoplay muted playsinline></video><canvas id="canvas"></canvas><div class="overlay" id="engineLabel">ENGINE: WAITING</div></div>
 <div class="status" id="status">Ready. Tap START CAMERA. Internet is required to load the AI model.</div>
@@ -54,14 +59,17 @@ footer{text-align:center;color:var(--muted);font:11px monospace;padding:8px}
 <button class="red" id="clearBtn">× CLEAR LOG</button><button id="stopBtn" disabled>■ STOP CAMERA</button>
 </section>
 <section class="panel"><h2>ACTIVE DETECTIONS</h2><div id="detections" class="empty">Start the camera to identify objects.</div></section>
-<section class="panel"><h2>DETECTION LOG</h2><div id="logs" class="list"><div class="empty">No detections logged.</div></div></section>
-<section class="panel actions"><button id="analysisBtn" class="gold">▤ OPEN ANALYSIS VIEW</button></section>
+</div>
+<div id="galleryView" class="view"><section class="panel"><h2>GALLERY</h2><p class="empty">Detected objects appear here as live labels. Image gallery capture is not included in this version.</p></section></div>
+<div id="statsView" class="view"><section class="panel actions"><button id="analysisBtn" class="gold">▤ REFRESH ANALYSIS</button></section>
 <section class="panel" id="analysisView"><h2>ANALYSIS VIEW</h2><div class="stats">
 <div class="stat"><div class="num" id="analysisEvents">0</div><div class="lbl">LOGGED EVENTS</div></div>
 <div class="stat"><div class="num" id="analysisTypes">0</div><div class="lbl">OBJECT TYPES</div></div>
 <div class="stat"><div class="num" id="analysisAvg">0%</div><div class="lbl">AVG CONFIDENCE</div></div>
 <div class="stat"><div class="num" id="analysisTop">—</div><div class="lbl">TOP OBJECT</div></div>
 </div><h2 style="margin-top:14px">OBJECT BREAKDOWN</h2><div id="analysisBreakdown" class="empty">Start the camera and detect objects to build analysis.</div></section>
+</div>
+<div id="logsView" class="view"><section class="panel"><h2>DETECTION LOG</h2><div id="logs" class="list"><div class="empty">No detections logged.</div></div><button id="clearBtn2" class="red" style="width:100%;margin-top:8px">× CLEAR LOG</button><button id="csvBtn2" style="width:100%;margin-top:6px">↓ EXPORT CSV</button></section></div>
 <footer>LIVE AI · TENSORFLOW.JS · COCO-SSD</footer>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
@@ -82,7 +90,7 @@ async function start(){
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia)throw Error('Camera requires HTTPS. Open the published GitHub Pages HTTPS website.');
   say('Requesting camera permission…');
   if(!stream){
-   stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:facing},width:{ideal:640},height:{ideal:480}}});
+   stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:facing},width:{ideal:320},height:{ideal:240},frameRate:{ideal:30,max:30}}});
    video.srcObject=stream;
    await new Promise((resolve,reject)=>{video.onloadedmetadata=resolve;video.onerror=reject});
    await video.play();
@@ -90,7 +98,7 @@ async function start(){
   if(!model){
    say('Loading AI model. Please wait; first launch needs internet…');
    if(!window.tf||!window.cocoSsd)throw Error('AI libraries did not load. Check internet and reload.');
-   await tf.ready();model=await cocoSsd.load({base:'lite_mobilenet_v2'});
+   try{await tf.setBackend('webgl')}catch(_){} await tf.ready();model=await cocoSsd.load({base:'lite_mobilenet_v2'});
   }
   running=true;paused=false;buttons(true);$('engine').textContent='LIVE';$('engineLabel').textContent='ENGINE: LIVE AI';say('Camera and AI detection running. Point at common objects.');
   frames=0;fpsStamp=performance.now();loop();
@@ -101,7 +109,7 @@ async function loop(){
  if(video.videoWidth&&video.videoHeight){canvas.width=video.videoWidth;canvas.height=video.videoHeight}
  if(!busy&&model&&video.readyState>=2){
   busy=true;
-  try{const p=await model.detect(video,20,.45);draw(p);scans++;$('scanCount').textContent=scans;$('objectCount').textContent=p.length;render(p);record(p)}
+  try{const inferStart=performance.now();const p=await model.detect(video,10,.35);const inferMs=Math.round(performance.now()-inferStart);$('engineLabel').textContent='AI LIVE · '+inferMs+' ms';draw(p);scans++;$('scanCount').textContent=scans;$('objectCount').textContent=p.length;render(p);record(p)}
   catch(e){say('Detection error: '+e.message)}
   finally{busy=false}
  }
@@ -143,7 +151,9 @@ function renderAnalysis(){
  $('analysisBreakdown').innerHTML=types.length?types.map(k=>'<div class="item"><span>'+esc(k)+' <small>· '+counts[k]+' event(s)</small></span><b>'+Math.round(conf[k]/counts[k])+'% avg</b></div>').join(''):'No analysis yet. Start the camera to detect objects.';
 }
 function stop(){running=false;paused=false;cancelAnimationFrame(raf);stopTracks();ctx.clearRect(0,0,canvas.width,canvas.height);buttons(false);$('engine').textContent='OFF';$('engineLabel').textContent='ENGINE: STOPPED';$('fps').textContent='0';$('objectCount').textContent='0';say('Camera stopped.')}
-$('analysisBtn').onclick=()=>{$('analysisView').scrollIntoView({behavior:'smooth',block:'start'});renderAnalysis()};
+$('analysisBtn').onclick=()=>renderAnalysis();
+document.querySelectorAll('.bottom-nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('.bottom-nav button').forEach(x=>x.classList.toggle('active',x===b));document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active',v.id===b.dataset.view));if(b.dataset.view==='statsView')renderAnalysis()});
+$('clearBtn2').onclick=()=>$('clearBtn').click();$('csvBtn2').onclick=()=>$('csvBtn').click();
 $('startBtn').onclick=start;
 $('pauseBtn').onclick=()=>{if(!running)return;paused=!paused;$('pauseBtn').textContent=paused?'▶ RESUME':'Ⅱ PAUSE';if(paused){cancelAnimationFrame(raf);say('Detection paused.')}else{say('Detection resumed.');fpsStamp=performance.now();frames=0;loop()}};
 $('stopBtn').onclick=stop;
